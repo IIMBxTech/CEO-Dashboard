@@ -4,18 +4,32 @@ import Hub from '@/components/Hub';
 import Spoke from '@/components/Spoke';
 import Kanban from '@/components/Kanban';
 import ChatPanel from '@/components/ChatPanel';
+import FilterBar, { FilterState } from '@/components/FilterBar';
+import TrendLine from '@/components/TrendLine';
+import DrillModal from '@/components/DrillModal';
 
 // ── Types ──────────────────────────────────────────────────────────
 type Course = { name: string; value: number; color: string };
 type ModalType = 'total' | 'avg' | 'attention' | 'ontrack' | null;
 
-// ── KPI Card definitions ────────────────────────────────────────────
-const KPI_META = [
-  { id: 'total',     label: 'Total Courses',   value: '6',   sub: 'Active programmes',  icon: '📚', accent: '#3b82f6', trend: '+2 this month' },
-  { id: 'avg',       label: 'Avg Completion',  value: '74%', sub: 'Across all courses', icon: '🎯', accent: '#10b981', trend: '+8% vs last month' },
-  { id: 'attention', label: 'Needs Attention', value: '2',   sub: 'Courses flagged',    icon: '⚠️', accent: '#ef4444', trend: 'Requires action' },
-  { id: 'ontrack',   label: 'On Track',        value: '4',   sub: 'Running smoothly',   icon: '✅', accent: '#8b5cf6', trend: 'All milestones met' },
-];
+// ── Dynamic KPI builder (run after courses load) ───────────────────
+function buildKpiMeta(courses: Course[], filter: FilterState) {
+  let filtered = courses;
+  if (filter.course && filter.course !== 'All') {
+    filtered = courses.filter(c => c.name === filter.course);
+  }
+  
+  const total     = filtered.length || 0;
+  const avg       = filtered.length ? Math.round(filtered.reduce((s, c) => s + c.value, 0) / filtered.length) : 0;
+  const attention = filtered.filter(c => c.value < (filter.threshold || 70)).length;
+  const ontrack   = filtered.filter(c => c.value >= (filter.threshold || 70)).length;
+  return [
+    { id: 'total',     label: 'Total Courses',   value: String(total),     sub: 'Active programmes',  icon: '📚', accent: '#3b82f6', trend: `${total} programmes` },
+    { id: 'avg',       label: 'Avg Completion',  value: `${avg}%`,         sub: 'Across selected',    icon: '🎯', accent: '#10b981', trend: avg >= 75 ? '↑ Above target' : '↓ Below target' },
+    { id: 'attention', label: 'Needs Attention', value: String(attention), sub: `Below ${filter.threshold || 70}%`, icon: '⚠️', accent: '#ef4444', trend: attention ? 'Requires action' : 'All clear ✓' },
+    { id: 'ontrack',   label: 'On Track',        value: String(ontrack),   sub: `Above ${filter.threshold || 70}%`, icon: '✅', accent: '#8b5cf6', trend: 'Milestones met' },
+  ];
+}
 
 // ── Modal content builder ───────────────────────────────────────────
 function ModalContent({ type, courses }: { type: ModalType; courses: Course[] }) {
@@ -112,10 +126,17 @@ const MODAL_TITLES: Record<string, string> = {
 
 // ── Main Dashboard Page ─────────────────────────────────────────────
 export default function DashboardPage() {
-  const [selectedCourse, setSelectedCourse] = useState<string | undefined>('Analytics Bootcamp');
+  const [filter, setFilter] = useState<FilterState>({ course: 'All', stage: 'All', threshold: 70 });
   const [currentTime, setCurrentTime]       = useState('');
   const [courses, setCourses]               = useState<Course[]>([]);
   const [modal, setModal]                   = useState<ModalType>(null);
+  
+  // DrillModal state
+  const [drillModalOpen, setDrillModalOpen] = useState(false);
+  const [drillModalTitle, setDrillModalTitle] = useState('Data Explorer');
+
+  // We map the filter.course back to selectedCourse for Spoke component
+  const selectedCourse = filter.course === 'All' ? undefined : filter.course;
 
   useEffect(() => {
     fetch('/api/courses').then(r => r.json()).then(j => setCourses(j.data || []));
@@ -162,11 +183,33 @@ export default function DashboardPage() {
             <h1 className="dash-title">Executive Operations</h1>
             <p className="dash-subtitle">Real-time programme intelligence · synced from Google Sheets → cPanel</p>
           </div>
+          <div style={{ display: 'flex', gap: '1rem', alignItems: 'center' }}>
+            {/* Master Toggle */}
+            <div style={{ background: 'rgba(255,255,255,0.05)', borderRadius: '12px', padding: '0.3rem', display: 'flex', gap: '0.2rem', border: '1px solid rgba(255,255,255,0.1)' }}>
+              <button 
+                onClick={() => setFilter({ ...filter, program: 'Swayam' })}
+                style={{ background: filter.program === 'Swayam' ? '#3b82f6' : 'transparent', color: '#fff', border: 'none', padding: '0.5rem 1rem', borderRadius: '8px', cursor: 'pointer', fontWeight: 600, fontSize: '0.85rem', transition: 'all 0.2s' }}
+              >Swayam</button>
+              <button 
+                onClick={() => setFilter({ ...filter, program: 'BBA DBE' })}
+                style={{ background: filter.program === 'BBA DBE' ? '#8b5cf6' : 'transparent', color: '#fff', border: 'none', padding: '0.5rem 1rem', borderRadius: '8px', cursor: 'pointer', fontWeight: 600, fontSize: '0.85rem', transition: 'all 0.2s' }}
+              >BBA DBE</button>
+            </div>
+            
+            <button 
+              style={{ background: '#3b82f6', color: '#fff', border: 'none', padding: '0.6rem 1.25rem', borderRadius: '8px', cursor: 'pointer', fontWeight: 600, fontSize: '0.9rem', boxShadow: '0 4px 12px rgba(59,130,246,0.3)' }}
+              onClick={() => { setDrillModalTitle('Data Explorer (All Data)'); setDrillModalOpen(true); }}
+            >
+              Explore Raw Data
+            </button>
+          </div>
         </div>
 
-        {/* ── KPI Cards (clickable) ── */}
+        <FilterBar filter={filter} onChange={setFilter} />
+
+        {/* ── KPI Cards (clickable, dynamic) ── */}
         <div className="kpi-grid">
-          {KPI_META.map((k) => (
+          {buildKpiMeta(courses, filter).map((k) => (
             <div
               key={k.id}
               className="kpi-card"
@@ -182,7 +225,6 @@ export default function DashboardPage() {
               <div className="kpi-label">{k.label}</div>
               <div className="kpi-sub">{k.sub}</div>
               <div className="kpi-bar" />
-              {/* Click hint */}
               <div style={{ position:'absolute', bottom:'0.75rem', right:'0.85rem', fontSize:'0.7rem', color:'rgba(255,255,255,0.25)', fontWeight:500 }}>
                 tap to expand ↗
               </div>
@@ -192,11 +234,20 @@ export default function DashboardPage() {
 
         {/* ── Charts ── */}
         <div className="charts-grid">
-          <Hub onSegmentClick={setSelectedCourse} />
-          <Spoke selectedCourse={selectedCourse} />
+          <Hub program={filter.program} onSegmentClick={(c) => setFilter({ ...filter, course: c })} />
+          <Spoke 
+            program={filter.program}
+            selectedCourse={selectedCourse} 
+            onBarClick={(stage) => {
+              setFilter({ ...filter, stage });
+              setDrillModalTitle(`Data Explorer: ${stage}`);
+              setDrillModalOpen(true);
+            }} 
+          />
+          <TrendLine selectedCourse={selectedCourse} />
         </div>
 
-        <Kanban />
+        <Kanban program={filter.program} />
       </main>
 
       <ChatPanel />
@@ -226,6 +277,14 @@ export default function DashboardPage() {
           </div>
         </div>
       )}
+
+      <DrillModal 
+        isOpen={drillModalOpen} 
+        onClose={() => setDrillModalOpen(false)} 
+        title={drillModalTitle} 
+        courseFilter={filter.course !== 'All' ? filter.course : undefined} 
+        stageFilter={filter.stage !== 'All' ? filter.stage : undefined} 
+      />
 
       <style>{`
         @keyframes fadeIn  { from { opacity:0 } to { opacity:1 } }

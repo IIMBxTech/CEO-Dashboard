@@ -1,15 +1,16 @@
 'use client';
 import React, { useState, useEffect } from 'react';
 
-export default function Kanban() {
+export default function Kanban({ program }: { program?: string }) {
   const [kanbanData, setKanbanData] = useState({ needsAttention: [], onTrack: [], opportunities: [] });
 
   useEffect(() => {
     // Live execution fetching structured JSON from Gemini Endpoint
+    // We pass the program view so AI limits context accordingly
     fetch('/api/gemini', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ queryResult: "TRIGGER_LIVE_ANALYSIS" })
+      body: JSON.stringify({ queryResult: "TRIGGER_LIVE_ANALYSIS", program: program || 'All' })
     })
       .then(res => res.json())
       .then(json => {
@@ -22,12 +23,12 @@ export default function Kanban() {
          }
       })
       .catch(err => console.error("Failed to fetch Kanban AI Insights:", err));
-  }, []);
+  }, [program]);
 
   return (
     <div className="glass-panel" style={{ marginTop: '2rem' }}>
       <h2 style={{ fontSize: '1.25rem', marginBottom: '0.5rem' }}>AI Insights Board</h2>
-      <p style={{ color: 'var(--text-secondary)', marginBottom: '1.5rem', fontSize: '0.9rem' }}>Auto-categorized Live via Gemini 2.0 Flash.</p>
+      <p style={{ color: 'var(--text-secondary)', marginBottom: '1.5rem', fontSize: '0.9rem' }}>Auto-categorized Live via Gemini 3.1 Flash.</p>
       
       <div className="kanban-grid">
         <div className="kanban-column">

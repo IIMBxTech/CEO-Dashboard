@@ -2,16 +2,17 @@
 import React, { useState, useEffect } from 'react';
 import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer } from 'recharts';
 
-export default function Hub({ onSegmentClick }: { onSegmentClick?: (name: string) => void }) {
+export default function Hub({ program, onSegmentClick }: { program?: string, onSegmentClick?: (name: string) => void }) {
   const [data, setData] = useState<{ name: string; value: number; color: string }[]>([]);
   const [active, setActive] = useState<string | null>(null);
 
   useEffect(() => {
-    fetch('/api/courses')
+    const url = program ? `/api/courses?program=${encodeURIComponent(program)}` : '/api/courses';
+    fetch(url)
       .then(res => res.json())
       .then(json => setData(json.data || []))
       .catch(err => console.error('Failed to fetch Hub data', err));
-  }, []);
+  }, [program]);
 
   return (
     <div className="glass-panel" style={{ height: '100%', minHeight: '340px', display: 'flex', flexDirection: 'column' }}>
@@ -19,7 +20,7 @@ export default function Hub({ onSegmentClick }: { onSegmentClick?: (name: string
 
       {/* Pie Chart */}
       <div style={{ width: '100%', height: '200px' }}>
-        <ResponsiveContainer>
+        <ResponsiveContainer width="100%" height="100%">
           <PieChart>
             <Pie
               data={data}
@@ -47,9 +48,18 @@ export default function Hub({ onSegmentClick }: { onSegmentClick?: (name: string
               ))}
             </Pie>
             <Tooltip
-              contentStyle={{ background: '#1e293b', border: '1px solid rgba(255,255,255,0.1)', borderRadius: '8px' }}
-              itemStyle={{ color: '#fff' }}
-              formatter={(val: number) => [`${val}%`, 'Completion']}
+              content={({ active, payload }: any) => {
+                if (active && payload && payload.length) {
+                  const data = payload[0].payload;
+                  return (
+                    <div style={{ background: '#1e293b', border: '1px solid rgba(255,255,255,0.2)', borderRadius: '8px', padding: '0.5rem 0.75rem', color: '#fff', fontSize: '0.85rem' }}>
+                      <div style={{ fontWeight: 600, marginBottom: '0.2rem', color: data.color || '#cbd5e1' }}>{data.name}</div>
+                      <div>Completion : {data.value}%</div>
+                    </div>
+                  );
+                }
+                return null;
+              }}
             />
           </PieChart>
         </ResponsiveContainer>
