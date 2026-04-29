@@ -50,7 +50,7 @@ export default function Spoke({ program, selectedCourse, onBarClick }: { program
               cursor={{ fill: 'rgba(255,255,255,0.05)' }}
               contentStyle={{ background: '#0f172a', border: '1px solid rgba(255,255,255,0.1)', borderRadius: '8px' }}
               itemStyle={{ color: '#fff' }}
-              formatter={(val: number) => [`${val}%`, 'Completion']}
+              formatter={(val: any) => [`${val}%`, 'Completion']}
             />
             <Bar 
               dataKey="completion" 

@@ -5,6 +5,7 @@ export type FilterState = {
   course: string;
   stage: string;
   threshold: number; // 0-100
+  program?: string;
 };
 
 type FilterBarProps = {

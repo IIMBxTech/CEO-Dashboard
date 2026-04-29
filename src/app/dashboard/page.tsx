@@ -1,5 +1,6 @@
 'use client';
 import React, { useState, useEffect } from 'react';
+import { useRouter } from 'next/navigation';
 import Hub from '@/components/Hub';
 import Spoke from '@/components/Spoke';
 import Kanban from '@/components/Kanban';
@@ -130,6 +131,13 @@ export default function DashboardPage() {
   const [currentTime, setCurrentTime]       = useState('');
   const [courses, setCourses]               = useState<Course[]>([]);
   const [modal, setModal]                   = useState<ModalType>(null);
+  const router = useRouter();
+
+  const handleLogout = async () => {
+    await fetch('/api/auth/logout', { method: 'POST' });
+    router.push('/login');
+    router.refresh();
+  };
   
   // DrillModal state
   const [drillModalOpen, setDrillModalOpen] = useState(false);
@@ -167,6 +175,13 @@ export default function DashboardPage() {
             <a className="dash-nav-link" href="#">Programmes</a>
             <a className="dash-nav-link" href="#">Reports</a>
             <a className="dash-nav-link" href="#">Settings</a>
+            <button 
+              onClick={handleLogout}
+              className="dash-nav-link" 
+              style={{ background: 'transparent', border: 'none', cursor: 'pointer', color: '#ef4444' }}
+            >
+              Logout
+            </button>
           </nav>
         </div>
         <div className="dash-nav-right">
