@@ -151,15 +151,24 @@ async function fetchCoursesForProgram(
   }
 
   // ── Swayam & future EaSE-style sheets ─────────────────────────────
-  // Deduplicate by course name, taking the weighted average completion
+  // The sheet uses merged cells: course name only appears in the FIRST row of
+  // a block; subsequent rows (M2, M3, …) have an empty name cell.
+  // We track the "currentCourse" across rows, exactly like the stages API.
   const courseMap = new Map<string, { sum: number; count: number }>();
+  let currentCourse = '';
+
   for (const row of rows) {
     const name = String(row[cfg.nameCol] ?? '').trim();
-    if (!name) continue;
-    const raw = String(row[cfg.valueCol] ?? '0').replace('%', '').trim();
+    if (name) currentCourse = name; // update when a new name appears
+
+    if (!currentCourse) continue; // skip leading empty rows before first course
+
+    const raw = String(row[cfg.valueCol] ?? '').replace('%', '').trim();
+    if (!raw || raw === '0') continue; // skip genuinely empty completion cells
+
     const val = Math.min(100, Math.max(0, parseFloat(raw) || 0));
-    if (!courseMap.has(name)) courseMap.set(name, { sum: 0, count: 0 });
-    const entry = courseMap.get(name)!;
+    if (!courseMap.has(currentCourse)) courseMap.set(currentCourse, { sum: 0, count: 0 });
+    const entry = courseMap.get(currentCourse)!;
     entry.sum += val;
     entry.count += 1;
   }
