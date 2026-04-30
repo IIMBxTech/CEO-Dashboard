@@ -1,15 +1,84 @@
 import { NextRequest, NextResponse } from 'next/server';
 
-// Fallback data if sheets fail
-const FALLBACK_DATA: Record<string, { stage: string; completion: number }[]> = {
-  'Analytics Bootcamp': [
-    { stage: 'CP1', completion: 80 }, { stage: 'CP2', completion: 45 },
-    { stage: 'CP3', completion: 30 }, { stage: 'CP4', completion: 10 },
-  ],
-  'Securities, Market and Trading': [
-    { stage: 'Recording', completion: 100 }, { stage: 'Edit Notes', completion: 100 },
-    { stage: 'Editing', completion: 100 }, { stage: 'Course Build', completion: 100 },
-  ],
+/**
+ * Program → Sheet/column config for stage-level drill-down.
+ *
+ * sheetEnvVar   : env var holding the sheet name.
+ * defaultSheet  : hardcoded default (empty = no data yet).
+ * courseNameCol : column index of the course name.
+ * stageNameCol  : column index of the stage/step name.
+ * completionCol : column index of the completion percentage.
+ * alwaysOn      : skip the "no data" guard for built-in programs.
+ *
+ * To wire a new program, add its env vars to .env:
+ *   FINTECH_SHEET="My FinTech Sheet"
+ *   FINTECH_ENABLED=true
+ * And optionally add a custom stageNameCol / completionCol.
+ */
+const PROGRAM_STAGE_CONFIG: Record<string, {
+  sheetEnvVar: string;
+  defaultSheet: string;
+  courseNameCol: number;
+  stageNameCol: number;
+  completionCol: number;
+  alwaysOn: boolean;
+}> = {
+  'Swayam': {
+    sheetEnvVar:    'SWAYAM_SHEET',
+    defaultSheet:   'EaSE Dasboard Skeleton',
+    courseNameCol:  1,
+    stageNameCol:   6,
+    completionCol:  9,
+    alwaysOn:       true,
+  },
+  'BBA DBE': {
+    sheetEnvVar:    'BBA_DBE_SHEET',
+    defaultSheet:   'New Courses',
+    courseNameCol:  0,
+    stageNameCol:   -1,  // BBA DBE uses special ratio logic (see below)
+    completionCol:  -1,
+    alwaysOn:       true,
+  },
+  'Airlines': {
+    sheetEnvVar:    'AIRLINES_SHEET',
+    defaultSheet:   '',
+    courseNameCol:  1,
+    stageNameCol:   6,
+    completionCol:  9,
+    alwaysOn:       false,
+  },
+  'eDX': {
+    sheetEnvVar:    'EDX_SHEET',
+    defaultSheet:   '',
+    courseNameCol:  1,
+    stageNameCol:   6,
+    completionCol:  9,
+    alwaysOn:       false,
+  },
+  'FinTech': {
+    sheetEnvVar:    'FINTECH_SHEET',
+    defaultSheet:   '',
+    courseNameCol:  1,
+    stageNameCol:   6,
+    completionCol:  9,
+    alwaysOn:       false,
+  },
+  'HM': {
+    sheetEnvVar:    'HM_SHEET',
+    defaultSheet:   '',
+    courseNameCol:  1,
+    stageNameCol:   6,
+    completionCol:  9,
+    alwaysOn:       false,
+  },
+  'iGot': {
+    sheetEnvVar:    'IGOT_SHEET',
+    defaultSheet:   '',
+    courseNameCol:  1,
+    stageNameCol:   6,
+    completionCol:  9,
+    alwaysOn:       false,
+  },
 };
 
 /** Extract spreadsheet ID from a full Google Sheets URL or bare ID */
@@ -18,7 +87,7 @@ function extractSpreadsheetId(link: string): string {
   return match ? match[1] : link.trim();
 }
 
-/** Minimal CSV parser that handles quoted fields with embedded commas/newlines */
+/** Minimal CSV parser */
 function parseCSV(csv: string): string[][] {
   const rows: string[][] = [];
   let row: string[] = [];
@@ -42,77 +111,76 @@ function parseCSV(csv: string): string[][] {
   return rows;
 }
 
-async function fetchStagesFromSheets(courseQuery: string, program: string) {
+async function fetchStages(courseQuery: string, program: string): Promise<{ stage: string; completion: number }[]> {
   const link = process.env.SPREADSHEET_LINK;
   if (!link) throw new Error('SPREADSHEET_LINK not set');
-
   const spreadsheetId = extractSpreadsheetId(link);
 
-  if (program === 'BBA DBE') {
-    // For BBA DBE (Degree), map from the New Courses pipeline
-    const csvUrl = `https://docs.google.com/spreadsheets/d/${spreadsheetId}/gviz/tq?tqx=out:csv&sheet=${encodeURIComponent('New Courses')}`;
-    const res = await fetch(csvUrl, { cache: 'no-store' });
-    if (!res.ok) throw new Error(`CSV fetch failed: ${res.status}`);
-    const rows = parseCSV(await res.text()).slice(1);
+  const cfg = PROGRAM_STAGE_CONFIG[program] ?? PROGRAM_STAGE_CONFIG['Swayam'];
 
-    const stages: { stage: string; completion: number }[] = [];
-    for (const row of rows) {
-      if (String(row[0] || '').trim() === courseQuery) {
-        const total = parseFloat(row[1] || '0');
-        if (total === 0) continue;
-        stages.push({ stage: 'Proposals Sent', completion: Math.round((parseFloat(row[2] || '0') / total) * 100) });
-        stages.push({ stage: 'Committee Rcvd', completion: Math.round((parseFloat(row[3] || '0') / total) * 100) });
-        stages.push({ stage: 'Feedback Rvwd', completion: Math.round((parseFloat(row[4] || '0') / total) * 100) });
-        break;
-      }
-    }
-    return stages;
-  }
+  // Determine sheet name
+  const sheetName = process.env[cfg.sheetEnvVar] || cfg.defaultSheet;
 
-  // Default / Swayam behavior
-  const sheetName = encodeURIComponent('EaSE Dasboard Skeleton');
-  const csvUrl = `https://docs.google.com/spreadsheets/d/${spreadsheetId}/gviz/tq?tqx=out:csv&sheet=${sheetName}`;
+  // Guard: if no sheet configured and not always-on, return empty
+  if (!sheetName.trim() && !cfg.alwaysOn) return [];
+  if (!sheetName.trim()) return [];
+
+  const csvUrl = `https://docs.google.com/spreadsheets/d/${spreadsheetId}/gviz/tq?tqx=out:csv&sheet=${encodeURIComponent(sheetName)}`;
   const res = await fetch(csvUrl, { cache: 'no-store' });
   if (!res.ok) throw new Error(`CSV fetch failed: ${res.status}`);
   const rows = parseCSV(await res.text()).slice(1);
 
+  // ── BBA DBE: synthetic stage breakdown ────────────────────────────
+  if (program === 'BBA DBE') {
+    for (const row of rows) {
+      if (String(row[0] || '').trim() === courseQuery) {
+        const total = parseFloat(row[1] || '0');
+        if (total === 0) continue;
+        return [
+          { stage: 'Proposals Sent',  completion: Math.round((parseFloat(row[2] || '0') / total) * 100) },
+          { stage: 'Committee Rcvd',  completion: Math.round((parseFloat(row[3] || '0') / total) * 100) },
+          { stage: 'Feedback Rvwd',   completion: Math.round((parseFloat(row[4] || '0') / total) * 100) },
+        ];
+      }
+    }
+    return [];
+  }
+
+  // ── EaSE-style sheets (Swayam and future programs) ─────────────────
+  // Track the current course as we scan rows (course name may only appear once
+  // at the start of a block, not repeated for every stage row)
   const stages: { stage: string; completion: number }[] = [];
   let currentCourse = '';
+
   for (const row of rows) {
-    const courseName = String(row[1] || '').trim();
+    const courseName = String(row[cfg.courseNameCol] ?? '').trim();
     if (courseName) currentCourse = courseName;
 
     if (currentCourse === courseQuery) {
-      const stageName = String(row[6] || '').trim();
-      const rawComp   = String(row[9] || '0').replace('%', '').trim();
+      const stageName = String(row[cfg.stageNameCol] ?? '').trim();
+      const rawComp   = String(row[cfg.completionCol] ?? '0').replace('%', '').trim();
       const compVal   = Math.min(100, Math.max(0, Math.round(parseFloat(rawComp) || 0)));
       if (stageName) stages.push({ stage: stageName, completion: compVal });
     }
   }
+
   return stages;
 }
 
 export async function GET(request: NextRequest) {
   const { searchParams } = new URL(request.url);
-  const course = searchParams.get('course') || '';
-  const program = searchParams.get('program') || '';
-  
+  const course  = searchParams.get('course')  || '';
+  const program = searchParams.get('program') || 'Swayam';
+
   if (!course) {
     return NextResponse.json({ success: true, data: [] });
   }
 
   try {
-    const data = await fetchStagesFromSheets(course, program);
-    if (data.length > 0) {
-        return NextResponse.json({ success: true, data, source: 'sheets' });
-    } else {
-        // Fallback if the course wasn't found in the sheet (for mocked course clicks)
-        const fallback = FALLBACK_DATA[course] || FALLBACK_DATA['Analytics Bootcamp'] || [];
-        return NextResponse.json({ success: true, data: fallback, source: 'fallback' });
-    }
+    const data = await fetchStages(course, program);
+    return NextResponse.json({ success: true, data, source: 'sheets', program });
   } catch (err: any) {
-    console.warn('[stages] Sheets unavailable, using fallback:', err?.message);
-    const data = FALLBACK_DATA[course] || FALLBACK_DATA['Analytics Bootcamp'] || [];
-    return NextResponse.json({ success: true, data, source: 'fallback' });
+    console.warn('[stages] Error:', err?.message);
+    return NextResponse.json({ success: false, data: [], error: err?.message }, { status: 500 });
   }
 }

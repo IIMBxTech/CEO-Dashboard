@@ -332,122 +332,149 @@ h1, h2, h3, h4 { font-weight: 700; letter-spacing: -0.025em; }
   line-height: 1.55;
 }
 
-/* ── Chat Panel ─────────────────────────────────────────────────── */
-.chat-panel {
-  position: fixed;
-  top: 0; right: -460px;
-  width: 420px;
-  height: 100vh;
-  background: rgba(13, 21, 40, 0.95);
-  backdrop-filter: blur(24px);
-  -webkit-backdrop-filter: blur(24px);
-  border-left: 1px solid var(--border);
-  box-shadow: -20px 0 60px rgba(0,0,0,0.6);
-  transition: right 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+/* ── Program Tab Strip ──────────────────────────────────────────── */
+.program-tabs {
+  display: flex;
+  gap: 0.4rem;
+  padding: 0.35rem;
+  background: rgba(255,255,255,0.04);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  margin-bottom: 2rem;
+  overflow-x: auto;
+  scrollbar-width: none;
+  flex-wrap: wrap;
+}
+.program-tabs::-webkit-scrollbar { display: none; }
+
+.program-tab {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.5rem 1.15rem;
+  border-radius: 10px;
+  border: 1px solid transparent;
+  background: transparent;
+  color: var(--text-2);
+  font-size: 0.875rem;
+  font-weight: 600;
+  cursor: pointer;
+  font-family: inherit;
+  white-space: nowrap;
+  transition: all 0.2s ease;
+  flex-shrink: 0;
+}
+.program-tab:hover {
+  background: rgba(255,255,255,0.06);
+  color: var(--text-1);
+  border-color: var(--border);
+}
+.program-tab.active {
+  background: color-mix(in srgb, var(--tab-color, var(--blue)) 15%, rgba(255,255,255,0.05));
+  border-color: color-mix(in srgb, var(--tab-color, var(--blue)) 40%, transparent);
+  color: #fff;
+  box-shadow: 0 0 16px color-mix(in srgb, var(--tab-color, var(--blue)) 20%, transparent);
+}
+.program-tab-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex-shrink: 0;
+  opacity: 0.85;
+}
+.program-tab.active .program-tab-dot {
+  opacity: 1;
+  box-shadow: 0 0 6px currentColor;
+}
+
+/* ── Stage Section Grid (Tableau-style) ─────────────────────────── */
+.stage-section-grid {
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  gap: 1rem;
+  margin-bottom: 2rem;
+}
+
+.stage-section-panel {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  padding: 1.25rem 1rem;
+  transition: border-color 0.2s ease, box-shadow 0.2s ease;
+  border-top: 3px solid var(--section-color, var(--blue));
+}
+.stage-section-panel:hover {
+  border-color: color-mix(in srgb, var(--section-color, var(--blue)) 40%, transparent);
+  box-shadow: 0 6px 24px rgba(0,0,0,0.25);
+}
+
+.stage-section-header {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  margin-bottom: 1rem;
+}
+.stage-section-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+.stage-section-title {
+  font-size: 0.82rem;
+  font-weight: 700;
+  color: var(--text-1);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  flex: 1;
+}
+.stage-section-badge {
+  font-size: 0.7rem;
+  font-weight: 700;
+  color: var(--text-2);
+  background: var(--surface-hover);
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  padding: 0.1rem 0.5rem;
+}
+
+.stage-section-list {
   display: flex;
   flex-direction: column;
-  z-index: 300;
+  gap: 0.55rem;
 }
-.chat-panel.open { right: 0; }
 
-.chat-header {
-  padding: 1.5rem;
-  border-bottom: 1px solid var(--border);
+.stage-section-row {
   display: flex;
-  justify-content: space-between;
-  align-items: center;
+  flex-direction: column;
+  gap: 0.3rem;
 }
-.chat-header h3 {
-  font-size: 1rem;
-  font-weight: 700;
-  background: linear-gradient(135deg, var(--blue), var(--cyan));
-  -webkit-background-clip: text;
-  -webkit-text-fill-color: transparent;
-}
-
-.chat-toggle-btn {
-  position: fixed;
-  bottom: 2rem; right: 2rem;
-  background: linear-gradient(135deg, var(--blue), var(--purple));
-  color: white;
-  border: none;
-  border-radius: 50%;
-  width: 58px; height: 58px;
-  font-size: 1.4rem;
-  cursor: pointer;
-  box-shadow: 0 0 24px var(--glow-blue), 0 4px 20px rgba(0,0,0,0.4);
-  z-index: 299;
-  transition: transform 0.2s ease, box-shadow 0.2s ease;
-}
-.chat-toggle-btn:hover {
-  transform: scale(1.12);
-  box-shadow: 0 0 32px var(--glow-blue);
+.stage-section-name {
+  font-size: 0.75rem;
+  color: var(--text-2);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 100%;
+  font-weight: 500;
 }
 
-.chat-body {
-  flex: 1;
-  padding: 1.5rem;
-  overflow-y: auto;
-  scroll-behavior: smooth;
+/* ── Skeleton Shimmer ───────────────────────────────────────────── */
+@keyframes shimmer {
+  0%   { background-position: -400px 0; }
+  100% { background-position: 400px 0; }
 }
-.chat-body::-webkit-scrollbar { width: 4px; }
-.chat-body::-webkit-scrollbar-track { background: transparent; }
-.chat-body::-webkit-scrollbar-thumb { background: var(--border-bright); border-radius: 4px; }
-
-.chat-message {
-  margin-bottom: 1rem;
-  padding: 1rem 1.1rem;
-  border-radius: var(--radius-sm);
-  background: var(--surface);
-  border: 1px solid var(--border);
-  font-size: 0.875rem;
-  line-height: 1.6;
-  animation: slideIn 0.3s ease;
+.skeleton-shimmer {
+  background: linear-gradient(
+    90deg,
+    rgba(255,255,255,0.04) 25%,
+    rgba(255,255,255,0.08) 50%,
+    rgba(255,255,255,0.04) 75%
+  );
+  background-size: 800px 100%;
+  animation: shimmer 1.6s infinite linear;
+  border-radius: 6px;
 }
-@keyframes slideIn {
-  from { opacity: 0; transform: translateY(8px); }
-  to   { opacity: 1; transform: translateY(0); }
-}
-.chat-message.ai   { border-left: 3px solid var(--green); }
-.chat-message.user { border-left: 3px solid var(--blue); background: rgba(59,130,246,0.07); }
-
-.chat-message strong { display: block; margin-bottom: 0.3rem; font-size: 0.78rem; text-transform: uppercase; letter-spacing: 0.05em; }
-.chat-message.ai strong   { color: var(--green); }
-.chat-message.user strong { color: var(--blue); }
-
-.chat-input-container {
-  padding: 1.25rem 1.5rem;
-  border-top: 1px solid var(--border);
-  display: flex;
-  gap: 0.6rem;
-}
-.chat-input {
-  flex: 1;
-  background: var(--surface);
-  border: 1px solid var(--border);
-  border-radius: var(--radius-sm);
-  padding: 0.75rem 1rem;
-  color: var(--text-1);
-  font-size: 0.875rem;
-  outline: none;
-  font-family: inherit;
-  transition: border-color 0.2s ease;
-}
-.chat-input:focus { border-color: var(--blue); }
-.chat-input::placeholder { color: var(--text-3); }
-.chat-send {
-  background: linear-gradient(135deg, var(--blue), var(--purple));
-  color: white;
-  border: none;
-  border-radius: var(--radius-sm);
-  padding: 0 1.2rem;
-  cursor: pointer;
-  font-weight: 600;
-  font-size: 0.875rem;
-  font-family: inherit;
-  transition: opacity 0.2s ease;
-}
-.chat-send:hover { opacity: 0.88; }
 
 /* ── Filter Bar ─────────────────────────────────────────────────── */
 .filter-bar {
@@ -562,16 +589,25 @@ h1, h2, h3, h4 { font-weight: 700; letter-spacing: -0.025em; }
 }
 
 /* ── Responsive ─────────────────────────────────────────────────── */
+@media (max-width: 1280px) {
+  .stage-section-grid { grid-template-columns: repeat(3, 1fr); }
+}
+
 @media (max-width: 1024px) {
-  .kpi-grid    { grid-template-columns: repeat(2, 1fr); }
-  .charts-grid { grid-template-columns: 1fr; }
+  .kpi-grid           { grid-template-columns: repeat(2, 1fr); }
+  .charts-grid        { grid-template-columns: 1fr; }
+  .stage-section-grid { grid-template-columns: repeat(3, 1fr); }
 }
 
 @media (max-width: 768px) {
-  .dash-nav-links { display: none; }
-  .kpi-grid       { grid-template-columns: 1fr 1fr; }
-  .kanban-grid    { grid-template-columns: 1fr; }
-  .dash-body      { padding: 1.5rem 1rem 3rem; }
-  .chat-panel     { width: 100%; right: -100%; }
-  .chat-toggle-btn { bottom: 1.25rem; right: 1.25rem; }
+  .dash-nav-links     { display: none; }
+  .kpi-grid           { grid-template-columns: 1fr 1fr; }
+  .kanban-grid        { grid-template-columns: 1fr; }
+  .stage-section-grid { grid-template-columns: repeat(2, 1fr); }
+  .dash-body          { padding: 1.5rem 1rem 3rem; }
+}
+
+@media (max-width: 480px) {
+  .stage-section-grid { grid-template-columns: 1fr; }
+  .program-tabs       { flex-wrap: wrap; }
 }

@@ -1,16 +1,77 @@
 import { NextResponse } from 'next/server';
 
-// Fallback mock data if Sheets is unavailable
-const FALLBACK_DATA = [
-  { name: 'Analytics Bootcamp', value: 65, color: '#ef4444' },
-  { name: 'Leadership Track',   value: 82, color: '#3b82f6' },
-  { name: 'Finance Essentials', value: 91, color: '#10b981' },
-  { name: 'Digital Marketing',  value: 47, color: '#f59e0b' },
-  { name: 'Product Strategy',   value: 73, color: '#8b5cf6' },
-  { name: 'Data Science Pro',   value: 88, color: '#06b6d4' },
-];
-
 const COLORS = ['#ef4444', '#3b82f6', '#10b981', '#f59e0b', '#8b5cf6', '#06b6d4', '#ec4899', '#14b8a6'];
+
+/**
+ * Program → Sheet configuration.
+ *
+ * Each entry defines HOW to read courses for that program.
+ *   sheetEnvVar : env variable holding the sheet name (optional override).
+ *                 Falls back to defaultSheet if not set.
+ *   defaultSheet: hardcoded default sheet name when no env var is provided.
+ *   nameCol     : 0-based column index of the course/domain name.
+ *   valueCol    : 0-based column index of the completion percentage (numeric or "xx%").
+ *   enabled     : whether this program has live data. Set via env var to true.
+ *                 If false → return [] so the UI shows "No data" instead of
+ *                 leaking another program's rows.
+ */
+const PROGRAM_CONFIG: Record<string, {
+  sheetEnvVar: string;
+  defaultSheet: string;
+  nameCol: number;
+  valueCol: number;
+  enabledEnvVar: string;
+}> = {
+  'Swayam': {
+    sheetEnvVar:    'SWAYAM_SHEET',
+    defaultSheet:   'EaSE Dasboard Skeleton',
+    nameCol:        1,
+    valueCol:       8,
+    enabledEnvVar:  'SWAYAM_ENABLED',
+  },
+  'BBA DBE': {
+    sheetEnvVar:    'BBA_DBE_SHEET',
+    defaultSheet:   'New Courses',
+    nameCol:        0,
+    valueCol:       4,  // feedbackCount → will be ratio'd against col 1
+    enabledEnvVar:  'BBA_DBE_ENABLED',
+  },
+  'Airlines': {
+    sheetEnvVar:    'AIRLINES_SHEET',
+    defaultSheet:   '',          // no sheet yet
+    nameCol:        1,
+    valueCol:       8,
+    enabledEnvVar:  'AIRLINES_ENABLED',
+  },
+  'eDX': {
+    sheetEnvVar:    'EDX_SHEET',
+    defaultSheet:   '',
+    nameCol:        1,
+    valueCol:       8,
+    enabledEnvVar:  'EDX_ENABLED',
+  },
+  'FinTech': {
+    sheetEnvVar:    'FINTECH_SHEET',
+    defaultSheet:   '',
+    nameCol:        1,
+    valueCol:       8,
+    enabledEnvVar:  'FINTECH_ENABLED',
+  },
+  'HM': {
+    sheetEnvVar:    'HM_SHEET',
+    defaultSheet:   '',
+    nameCol:        1,
+    valueCol:       8,
+    enabledEnvVar:  'HM_ENABLED',
+  },
+  'iGot': {
+    sheetEnvVar:    'IGOT_SHEET',
+    defaultSheet:   '',
+    nameCol:        1,
+    valueCol:       8,
+    enabledEnvVar:  'IGOT_ENABLED',
+  },
+};
 
 /** Extract spreadsheet ID from a full Google Sheets URL or bare ID */
 function extractSpreadsheetId(link: string): string {
@@ -42,83 +103,87 @@ function parseCSV(csv: string): string[][] {
   return rows;
 }
 
-async function fetchSheetData(link: string, spreadsheetId: string, sheetName: string) {
+async function fetchSheetRows(spreadsheetId: string, sheetName: string): Promise<string[][]> {
   const csvUrl = `https://docs.google.com/spreadsheets/d/${spreadsheetId}/gviz/tq?tqx=out:csv&sheet=${encodeURIComponent(sheetName)}`;
   const res = await fetch(csvUrl, { cache: 'no-store' });
-  if (!res.ok) return [];
+  if (!res.ok) throw new Error(`CSV fetch failed: ${res.status}`);
   const csv = await res.text();
-  const rows = parseCSV(csv);
-  return rows.slice(1);
+  return parseCSV(csv).slice(1); // strip header row
 }
 
-async function fetchFromSheets(program?: string | null) {
-  const link = process.env.SPREADSHEET_LINK;
-  if (!link) throw new Error('SPREADSHEET_LINK not set');
-  const spreadsheetId = extractSpreadsheetId(link);
+async function fetchCoursesForProgram(
+  program: string,
+  spreadsheetId: string
+): Promise<{ name: string; value: number; color: string }[]> {
 
-  let courses: { name: string, value: number, color: string }[] = [];
-  
-  if (!program || program === 'All' || program === 'Swayam') {
-    // 1. Process Skeleton (Swayam Course Data)
-    const mainRows = await fetchSheetData(link, spreadsheetId, 'EaSE Dasboard Skeleton');
-    const mainCourses = mainRows.map((row, i) => {
-      const name  = String(row[1] || '').trim();
-      const raw   = String(row[8] || '0').replace('%', '').trim();
-      const value = Math.min(100, Math.max(0, Math.round(parseFloat(raw) || 0)));
-      return { name, value, color: COLORS[i % COLORS.length] };
-    }).filter(r => r.name);
-    courses.push(...mainCourses);
+  const cfg = PROGRAM_CONFIG[program];
+  if (!cfg) return []; // unknown program
+
+  // Determine sheet name: env var → defaultSheet → nothing
+  const sheetName = process.env[cfg.sheetEnvVar] || cfg.defaultSheet;
+
+  // If no sheet is configured and not explicitly enabled, return empty
+  const explicitlyEnabled = process.env[cfg.enabledEnvVar] === 'true';
+  const hasSheet = sheetName.trim().length > 0;
+
+  // Always allow Swayam and BBA DBE (they have hardcoded defaults)
+  const alwaysOn = program === 'Swayam' || program === 'BBA DBE';
+
+  if (!hasSheet && !explicitlyEnabled && !alwaysOn) {
+    return []; // no data configured for this program yet
   }
 
-  if (!program || program === 'All' || program === 'BBA DBE') {
-    // 2. Process New Courses (BBA DBE)
-    const newCourseRows = await fetchSheetData(link, spreadsheetId, 'New Courses');
-    const bbaCourses = newCourseRows.map((row, i) => {
-      const domain = String(row[0] || '').trim();
-      const courseCount = parseFloat(row[1] || '0');
-      const feedbackCount = parseFloat(row[4] || '0');
-      let value = 0;
-      if (courseCount > 0) {
-         value = Math.min(100, Math.round((feedbackCount / courseCount) * 100));
-      }
-      return { name: domain, value, color: COLORS[(courses.length + i) % COLORS.length] };
-    }).filter(r => r.name);
-    courses.push(...bbaCourses);
-  }
-  
-  // 3. Process Timeline (Overall Aggregate)
-  const timelineRows = await fetchSheetData(link, spreadsheetId, 'Overview Timeline Mother Sheet');
-  if (timelineRows.length > 0) {
-    let sum = 0, count = 0;
-    timelineRows.forEach(r => {
-      const p = parseFloat(String(r[8] || '').replace('%', ''));
-      if (!isNaN(p)) { sum += p; count++; }
-    });
-    if (count > 0) courses.push({ name: 'Timeline Operations', value: Math.round(sum / count), color: COLORS[(courses.length) % COLORS.length] });
+  if (!hasSheet) return []; // still no sheet even if enabled flag set
+
+  const rows = await fetchSheetRows(spreadsheetId, sheetName);
+
+  // ── BBA DBE: special ratio logic ──────────────────────────────────
+  if (program === 'BBA DBE') {
+    return rows
+      .map((row, i) => {
+        const name = String(row[0] || '').trim();
+        const total = parseFloat(row[1] || '0');
+        const feedback = parseFloat(row[4] || '0');
+        const value = total > 0 ? Math.min(100, Math.round((feedback / total) * 100)) : 0;
+        return { name, value, color: COLORS[i % COLORS.length] };
+      })
+      .filter(r => r.name);
   }
 
-  // 4. Process Finance (Overall Aggregate)
-  const financeRows = await fetchSheetData(link, spreadsheetId, 'Mother_Sheet_Finance_July_25');
-  if (financeRows.length > 0) {
-    let sum = 0, count = 0;
-    financeRows.forEach(r => {
-      const p = parseFloat(String(r[7] || '').replace('%', ''));
-      if (!isNaN(p)) { sum += p; count++; }
-    });
-    if (count > 0) courses.push({ name: 'Finance Execution', value: Math.round(sum / count), color: COLORS[(courses.length) % COLORS.length] });
+  // ── Swayam & future EaSE-style sheets ─────────────────────────────
+  // Deduplicate by course name, taking the weighted average completion
+  const courseMap = new Map<string, { sum: number; count: number }>();
+  for (const row of rows) {
+    const name = String(row[cfg.nameCol] ?? '').trim();
+    if (!name) continue;
+    const raw = String(row[cfg.valueCol] ?? '0').replace('%', '').trim();
+    const val = Math.min(100, Math.max(0, parseFloat(raw) || 0));
+    if (!courseMap.has(name)) courseMap.set(name, { sum: 0, count: 0 });
+    const entry = courseMap.get(name)!;
+    entry.sum += val;
+    entry.count += 1;
   }
 
-  return courses;
+  return Array.from(courseMap.entries()).map(([name, { sum, count }], i) => ({
+    name,
+    value: Math.round(sum / count),
+    color: COLORS[i % COLORS.length],
+  }));
 }
 
 export async function GET(req: Request) {
   try {
     const url = new URL(req.url);
-    const program = url.searchParams.get('program');
-    const data = await fetchFromSheets(program);
-    return NextResponse.json({ success: true, data, source: 'sheets' });
+    const program = url.searchParams.get('program') || 'Swayam';
+
+    const link = process.env.SPREADSHEET_LINK;
+    if (!link) throw new Error('SPREADSHEET_LINK not set');
+    const spreadsheetId = extractSpreadsheetId(link);
+
+    const data = await fetchCoursesForProgram(program, spreadsheetId);
+    return NextResponse.json({ success: true, data, source: 'sheets', program });
   } catch (err: any) {
-    console.warn('[courses] Sheets unavailable, using fallback:', err?.message);
-    return NextResponse.json({ success: true, data: FALLBACK_DATA, source: 'fallback' });
+    console.warn('[courses] Error:', err?.message);
+    return NextResponse.json({ success: false, data: [], error: err?.message }, { status: 500 });
   }
 }
