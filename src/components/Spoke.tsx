@@ -36,58 +36,38 @@ const MODULE_LABEL_COLORS = [
 type RawStage = { stage: string; completion: number };
 
 type EnrichedStage = {
-  key: string;         // unique key: "M1-Rec"
-  stage: string;       // original stage name
-  displayName: string; // short: "Rec"
+  key: string;
+  stage: string;
+  displayName: string;
   module: number;
   completion: number;
+  isSeparator?: boolean;  // invisible spacer bar between modules
 };
 
 type ModuleGroup = {
   module: number;
   startKey: string;
   endKey: string;
+  separatorKey?: string;  // key of the spacer after this module
   label: string;
 };
 
 // ── Build enriched data + module groups ──────────────────────────────
 function enrichStages(raw: RawStage[]): { data: EnrichedStage[]; groups: ModuleGroup[] } {
+  // First pass: assign module numbers
   const seenInModule = new Set<string>();
   let moduleNum = 1;
-  const data: EnrichedStage[] = [];
-  const groups: ModuleGroup[] = [];
-
-  let moduleStartKey = '';
+  const staged: (EnrichedStage)[] = [];
 
   raw.forEach((item, idx) => {
     const stageKey = item.stage.toLowerCase();
-
-    // Detect module boundary: stage seen again → new module
     if (seenInModule.has(stageKey)) {
-      // Close previous module group
-      if (moduleStartKey) {
-        groups.push({
-          module: moduleNum,
-          startKey: moduleStartKey,
-          endKey: data[data.length - 1]?.key ?? moduleStartKey,
-          label: `M${moduleNum}`,
-        });
-      }
       seenInModule.clear();
       moduleNum++;
     }
-
-    if (seenInModule.size === 0) {
-      // First stage of new module
-      const key = `M${moduleNum}-${abbrev(item.stage)}-${idx}`;
-      moduleStartKey = key;
-    }
-
     seenInModule.add(stageKey);
-
-    const key = `M${moduleNum}-${abbrev(item.stage)}-${idx}`;
-    data.push({
-      key,
+    staged.push({
+      key: `M${moduleNum}-${abbrev(item.stage)}-${idx}`,
       stage: item.stage,
       displayName: abbrev(item.stage),
       module: moduleNum,
@@ -95,37 +75,76 @@ function enrichStages(raw: RawStage[]): { data: EnrichedStage[]; groups: ModuleG
     });
   });
 
+  const totalModules = moduleNum;
+
+  // Second pass: interleave spacer entries between modules
+  const data: EnrichedStage[] = [];
+  const groups: ModuleGroup[] = [];
+  let moduleStartKey = '';
+  let prevModule = 0;
+
+  staged.forEach((item, idx) => {
+    if (item.module !== prevModule) {
+      // New module starting
+      if (prevModule > 0 && prevModule < totalModules) {
+        // Insert spacer BEFORE this item (between modules)
+        const sepKey = `SEP-${prevModule}`;
+        data.push({ key: sepKey, stage: '', displayName: '', module: prevModule, completion: 0, isSeparator: true });
+        // Update the previous group's separatorKey
+        if (groups.length > 0) groups[groups.length - 1].separatorKey = sepKey;
+      }
+      moduleStartKey = item.key;
+      prevModule = item.module;
+    }
+    data.push(item);
+  });
+
+  // Build groups from data (excluding separators)
+  const realData = data.filter(d => !d.isSeparator);
+  for (let m = 1; m <= totalModules; m++) {
+    const moduleItems = realData.filter(d => d.module === m);
+    if (!moduleItems.length) continue;
+    const startKey = moduleItems[0].key;
+    const endKey   = moduleItems[moduleItems.length - 1].key;
+    const sepKey   = `SEP-${m}`;
+    groups.push({
+      module: m,
+      startKey,
+      endKey,
+      separatorKey: m < totalModules ? sepKey : undefined,
+      label: `M${m}`,
+    });
+  }
+
+  // Close last module group (kept for compat)
+  if (moduleStartKey && data.length > 0) {
+    // already handled above
+  }
+
   // Close last module group
   if (moduleStartKey && data.length > 0) {
     groups.push({
-      module: moduleNum,
-      startKey: moduleStartKey,
-      endKey: data[data.length - 1].key,
-      label: `M${moduleNum}`,
+      // already populated above — skip duplicate
+      module: 0, startKey: '', endKey: '', label: '',
     });
+    groups.pop(); // remove the dummy
   }
 
   return { data, groups };
 }
 
-// ── Custom X-axis tick: shows only the abbreviated stage name ─────────
+// ── Custom X-axis tick: shows abbreviated stage name, hidden for separators ──
 const StageTick = (props: any) => {
   const { x, y, payload } = props;
   if (!payload?.value) return null;
-
-  // payload.value is the full key like "M1-Rec-0", extract the display part
+  // Separator keys start with "SEP-" — hide their tick
+  if (String(payload.value).startsWith('SEP-')) return null;
+  // Key format: "M1-Rec-0" → extract index-1 part
   const parts = String(payload.value).split('-');
-  const label = parts[1] ?? payload.value; // "Rec", "EN", etc.
-
+  const label = parts[1] ?? payload.value;
   return (
     <g transform={`translate(${x},${y + 6})`}>
-      <text
-        x={0} y={0}
-        textAnchor="middle"
-        fill="#8a9cc0"
-        fontSize={10}
-        fontWeight={600}
-      >
+      <text x={0} y={0} textAnchor="middle" fill="#8a9cc0" fontSize={10} fontWeight={600}>
         {label}
       </text>
     </g>
@@ -161,6 +180,7 @@ const CustomTooltip = ({ active, payload }: any) => {
 // ── Module legend below the chart ────────────────────────────────────
 function ModuleLegend({ groups, data }: { groups: ModuleGroup[]; data: EnrichedStage[] }) {
   if (groups.length <= 1) return null;
+  const realData = data.filter(d => !d.isSeparator);
   return (
     <div style={{
       display: 'flex',
@@ -171,7 +191,7 @@ function ModuleLegend({ groups, data }: { groups: ModuleGroup[]; data: EnrichedS
       borderTop: '1px solid rgba(255,255,255,0.06)',
     }}>
       {groups.map(g => {
-        const moduleData = data.filter(d => d.module === g.module);
+        const moduleData = realData.filter(d => d.module === g.module);
         const avg = moduleData.length
           ? Math.round(moduleData.reduce((s, d) => s + d.completion, 0) / moduleData.length)
           : 0;
@@ -258,7 +278,7 @@ export default function Spoke({
                 margin={{ top: 24, right: 20, left: -20, bottom: 20 }}
                 barCategoryGap="15%"
               >
-                {/* Module band backgrounds */}
+                {/* Module band backgrounds — span only real bars */}
                 {groups.map(g => (
                   <ReferenceArea
                     key={`band-${g.module}`}
@@ -277,16 +297,18 @@ export default function Spoke({
                   />
                 ))}
 
-                {/* Module separator lines (between modules, not at start/end) */}
-                {groups.slice(0, -1).map(g => (
-                  <ReferenceLine
-                    key={`sep-${g.module}`}
-                    x={g.endKey}
-                    stroke="rgba(255,255,255,0.12)"
-                    strokeWidth={1.5}
-                    strokeDasharray="4 3"
-                  />
-                ))}
+                {/* Bold separator lines — drawn at the spacer key between modules */}
+                {groups
+                  .filter(g => g.separatorKey)
+                  .map(g => (
+                    <ReferenceLine
+                      key={`sep-${g.module}`}
+                      x={g.separatorKey}
+                      stroke={MODULE_LABEL_COLORS[(g.module - 1) % MODULE_LABEL_COLORS.length]}
+                      strokeWidth={3}
+                    />
+                  ))
+                }
 
                 <XAxis
                   dataKey="key"
@@ -318,11 +340,12 @@ export default function Spoke({
                     <Cell
                       key={`cell-${idx}`}
                       fill={
-                        entry.completion > 80 ? '#10b981'
+                        entry.isSeparator ? 'transparent'
+                        : entry.completion > 80 ? '#10b981'
                         : entry.completion > 40 ? '#3b82f6'
                         : '#ef4444'
                       }
-                      fillOpacity={0.9}
+                      fillOpacity={entry.isSeparator ? 0 : 0.9}
                     />
                   ))}
                 </Bar>
