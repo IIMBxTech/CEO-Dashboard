@@ -28,7 +28,7 @@ export default function Kanban({ program }: { program?: string }) {
   return (
     <div className="glass-panel" style={{ marginTop: '2rem' }}>
       <h2 style={{ fontSize: '1.25rem', marginBottom: '0.5rem' }}>AI Insights Board</h2>
-      <p style={{ color: 'var(--text-secondary)', marginBottom: '1.5rem', fontSize: '0.9rem' }}>Auto-categorized Live via Gemini 1.5 Flash.</p>
+      <p style={{ color: 'var(--text-secondary)', marginBottom: '1.5rem', fontSize: '0.9rem' }}>Auto-categorized Live via Gemini 2.0 Flash.</p>
       
       <div className="kanban-grid">
         <div className="kanban-column">
