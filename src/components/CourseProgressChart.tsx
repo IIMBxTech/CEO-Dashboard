@@ -176,7 +176,7 @@ export default function CourseProgressChart({ program }: { program?: string }) {
             <LabelList
               dataKey="completion"
               position="top"
-              formatter={(v: number) => `${v}`}
+              formatter={(v: any) => `${v}`}
               style={{ fill: '#cbd5e1', fontSize: 11, fontWeight: 700 }}
             />
           </Bar>
