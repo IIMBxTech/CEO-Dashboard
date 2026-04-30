@@ -8,7 +8,7 @@ export async function POST(req: Request) {
     const body = await req.json();
     const { queryResult, message, mode, program } = body;
 
-    const model = genAI.getGenerativeModel({ model: 'gemini-3.1-flash' });
+    const model = genAI.getGenerativeModel({ model: 'gemini-1.5-flash' });
 
     // ── Helper to load sheets for context
     const getDynamicContext = async (prog: string) => {
