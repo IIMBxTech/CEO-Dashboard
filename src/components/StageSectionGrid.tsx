@@ -132,8 +132,9 @@ export default function StageSectionGrid({ program }: { program?: string }) {
         }
 
         // Build a stage map by fetching stages for each course
-        const stageMap: Record<string, CourseRow[]> = {};
-        STAGE_SECTIONS.forEach(s => { stageMap[s] = []; });
+        // Use accumulators: stageSumMap[section][courseName] = { sum, count }
+        const stageSumMap: Record<string, Record<string, { sum: number; count: number }>> = {};
+        STAGE_SECTIONS.forEach(s => { stageSumMap[s] = {}; });
 
         await Promise.all(
           courses.slice(0, 20).map(async (course) => {
@@ -150,12 +151,13 @@ export default function StageSectionGrid({ program }: { program?: string }) {
                   sd.stage.toLowerCase().includes(s.toLowerCase()) ||
                   s.toLowerCase().includes(sd.stage.toLowerCase())
                 );
-                if (matched && stageMap[matched]) {
-                  // Deduplicate: only add if this course isn't already in this section
-                  const alreadyAdded = stageMap[matched].some(r => r.name === course.name);
-                  if (!alreadyAdded) {
-                    stageMap[matched].push({ name: course.name, completion: sd.completion });
+                if (matched && stageSumMap[matched]) {
+                  // Accumulate all module values for this stage section
+                  if (!stageSumMap[matched][course.name]) {
+                    stageSumMap[matched][course.name] = { sum: 0, count: 0 };
                   }
+                  stageSumMap[matched][course.name].sum += sd.completion;
+                  stageSumMap[matched][course.name].count += 1;
                 }
               });
             } catch {
@@ -163,6 +165,15 @@ export default function StageSectionGrid({ program }: { program?: string }) {
             }
           })
         );
+
+        // Convert accumulators into averaged CourseRow arrays
+        const stageMap: Record<string, CourseRow[]> = {};
+        STAGE_SECTIONS.forEach(s => {
+          stageMap[s] = Object.entries(stageSumMap[s]).map(([name, { sum, count }]) => ({
+            name,
+            completion: count > 0 ? Math.round(sum / count) : 0,
+          }));
+        });
 
         // Check if we got any real stage data — NO fallback to overall values
         const totalRows = STAGE_SECTIONS.reduce((sum, s) => sum + stageMap[s].length, 0);

@@ -164,7 +164,7 @@ async function fetchCoursesForProgram(
     if (!currentCourse) continue; // skip leading empty rows before first course
 
     const raw = String(row[cfg.valueCol] ?? '').replace('%', '').trim();
-    if (!raw || raw === '0') continue; // skip genuinely empty completion cells
+    if (raw === '') continue; // skip genuinely empty cells (no data at all)
 
     const val = Math.min(100, Math.max(0, parseFloat(raw) || 0));
     if (!courseMap.has(currentCourse)) courseMap.set(currentCourse, { sum: 0, count: 0 });
